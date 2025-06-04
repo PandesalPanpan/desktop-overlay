@@ -83,40 +83,10 @@ class OverlayWindow(QMainWindow):
         self.border_width = 20  # Increased width for better blur effect
         self.border_color = QColor(initial_color.red(), initial_color.green(), initial_color.blue(), 100)
         
-        # Create blur effect
-        self.blur_effect = QGraphicsBlurEffect()
+        # Create blur effect and keep reference
+        self.blur_effect = QGraphicsBlurEffect(self)
         self.blur_effect.setBlurRadius(15)  # Adjust blur intensity
         self.setGraphicsEffect(self.blur_effect)
-
-    def update_color(self, color):
-        # Update the border color and maintain transparency
-        self.border_color = QColor(color.red(), color.green(), color.blue(), 100)
-        
-        # Temporarily disable blur effect to avoid layered window issues
-        self.setGraphicsEffect(None)
-        
-        # Hide and show the window to force a complete refresh
-        was_visible = self.isVisible()
-        self.hide()
-        
-        # Use a timer to show the window again with the new color
-        QTimer.singleShot(50, lambda: self._restore_window(was_visible))
-
-    def _restore_window(self, was_visible):
-        if was_visible:
-            self.show()
-        
-        # Restore blur effect after the window is shown
-        QTimer.singleShot(100, self._restore_blur)
-
-    def _restore_blur(self):
-        # Re-enable blur effect
-        self.blur_effect = QGraphicsBlurEffect()
-        self.blur_effect.setBlurRadius(15)
-        self.setGraphicsEffect(self.blur_effect)
-        
-        # Setup click-through again
-        self.setup_click_through()
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -160,6 +130,46 @@ class OverlayWindow(QMainWindow):
         painter.setBrush(self.border_color)
         painter.drawPath(path)
 
+class OverlayWindowManager(QObject):
+    def __init__(self, app):
+        super().__init__()
+        self.app = app
+        self.windows = []
+        self.current_color = QColor(0, 120, 255)
+        self.windows_visible = True
+        
+    def create_windows(self, color):
+        """Create overlay windows for all screens"""
+        # Close existing windows
+        self.close_windows()
+        
+        # Create new windows with the specified color
+        self.current_color = color
+        self.windows = []
+        
+        for screen in self.app.screens():
+            window = OverlayWindow(screen.geometry(), color)
+            if self.windows_visible:
+                window.show()
+            self.windows.append(window)
+    
+    def close_windows(self):
+        """Close all existing windows"""
+        for window in self.windows:
+            window.close()
+            window.deleteLater()
+        self.windows = []
+    
+    def toggle_visibility(self):
+        """Toggle visibility of all windows"""
+        self.windows_visible = not self.windows_visible
+        for window in self.windows:
+            window.setVisible(self.windows_visible)
+    
+    def update_color(self, color):
+        """Update color by recreating all windows"""
+        self.create_windows(color)
+
 def create_tray_icon(color=QColor(0, 120, 255)):
     # Create a simple colored square icon
     pixmap = QPixmap(32, 32)
@@ -197,6 +207,9 @@ def main():
     # Load saved color or use default
     current_color = load_config()
     print(f"Loaded color: {current_color.name()}")
+    
+    # Create overlay window manager
+    window_manager = OverlayWindowManager(app)
     
     # Create system tray icon with custom icon
     tray_icon = QSystemTrayIcon()
@@ -237,18 +250,10 @@ def main():
     # Create color changer
     color_changer = ColorChanger()
     
-    # Create overlay windows for each screen
-    windows = []
-    for screen in app.screens():
-        window = OverlayWindow(screen.geometry(), current_color)
-        window.show()
-        windows.append(window)
+    # Create initial overlay windows
+    window_manager.create_windows(current_color)
     
     # Connect signals
-    def toggle_overlays():
-        for window in windows:
-            window.setVisible(not window.isVisible())
-    
     def update_color(color):
         nonlocal current_color
         current_color = color
@@ -257,9 +262,8 @@ def main():
         # Save the new color
         save_config(color)
         
-        # Update all overlay windows
-        for window in windows:
-            window.update_color(color)
+        # Update overlay windows by recreating them
+        window_manager.update_color(color)
         
         # Update tray icon to match new color
         tray_icon.setIcon(create_tray_icon(color))
@@ -267,10 +271,10 @@ def main():
     def change_overlay_color():
         color_changer.show_color_dialog(current_color)
     
-    toggle_action.triggered.connect(toggle_overlays)
+    toggle_action.triggered.connect(window_manager.toggle_visibility)
     color_action.triggered.connect(change_overlay_color)
     color_changer.color_selected.connect(update_color)
-    overlay_manager.toggle_signal.connect(toggle_overlays)
+    overlay_manager.toggle_signal.connect(window_manager.toggle_visibility)
     exit_action.triggered.connect(app.quit)
     
     sys.exit(app.exec_())

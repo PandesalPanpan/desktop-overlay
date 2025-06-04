@@ -34,3 +34,6 @@ Desktop.ini
 # Local development settings
 .env
 .env.local
+
+# Overlay config
+overlay_config.json
