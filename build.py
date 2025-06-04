@@ -19,13 +19,22 @@ def build_executable():
     # Wait a moment to ensure file system is ready
     time.sleep(1)
 
+    # Check if icon file exists
+    icon_path = 'icon.ico'
+    if not os.path.exists(icon_path):
+        print(f"Warning: {icon_path} not found. Building without custom icon.")
+        icon_param = '--icon=NONE'
+    else:
+        print(f"Using icon: {icon_path}")
+        icon_param = f'--icon={icon_path}'
+
     # Run PyInstaller
     PyInstaller.__main__.run([
         'overlay.py',
         '--onefile',
         '--noconsole',
         '--name=desktop-overlay',
-        '--icon=NONE',
+        icon_param,
         '--add-data=README.md;.',
         '--clean'  # Clean PyInstaller cache
     ])
