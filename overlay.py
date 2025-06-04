@@ -1,7 +1,22 @@
 import sys
-from PyQt5.QtWidgets import QApplication, QMainWindow, QGraphicsBlurEffect
+from PyQt5.QtWidgets import QApplication, QMainWindow, QGraphicsBlurEffect, QSystemTrayIcon, QMenu, QAction
 from PyQt5.QtCore import Qt, QRect, QRectF
-from PyQt5.QtGui import QColor, QPainter, QPainterPath
+from PyQt5.QtGui import QColor, QPainter, QPainterPath, QIcon
+from PyQt5.QtCore import QObject, pyqtSignal
+import keyboard
+import win32gui
+import win32con
+
+class OverlayManager(QObject):
+    toggle_signal = pyqtSignal()
+
+    def __init__(self):
+        super().__init__()
+        # Register the hotkey
+        keyboard.add_hotkey('ctrl+shift+o', self.toggle_overlay)
+
+    def toggle_overlay(self):
+        self.toggle_signal.emit()
 
 class OverlayWindow(QMainWindow):
     def __init__(self, screen_geometry):
@@ -10,11 +25,15 @@ class OverlayWindow(QMainWindow):
         self.setWindowFlags(
             Qt.FramelessWindowHint |  # No window frame
             Qt.WindowStaysOnTopHint |  # Always on top
-            Qt.Tool  # No taskbar icon
+            Qt.Tool |  # No taskbar icon
+            Qt.NoDropShadowWindowHint  # No shadow
         )
         
-        # Make the window transparent
+        # Make the window transparent and click-through
         self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.setAttribute(Qt.WA_NoSystemBackground)
+        self.setAttribute(Qt.WA_ShowWithoutActivating)
         
         # Set geometry for this specific screen
         self.setGeometry(screen_geometry)
@@ -27,6 +46,17 @@ class OverlayWindow(QMainWindow):
         self.blur_effect = QGraphicsBlurEffect()
         self.blur_effect.setBlurRadius(15)  # Adjust blur intensity
         self.setGraphicsEffect(self.blur_effect)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        # Make window click-through using win32gui
+        hwnd = self.winId().__int__()
+        # Get current window style
+        style = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
+        # Add WS_EX_TRANSPARENT and WS_EX_LAYERED
+        style |= win32con.WS_EX_TRANSPARENT | win32con.WS_EX_LAYERED
+        # Set the new style
+        win32gui.SetWindowLong(hwnd, win32con.GWL_EXSTYLE, style)
         
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -55,12 +85,43 @@ class OverlayWindow(QMainWindow):
 def main():
     app = QApplication(sys.argv)
     
-    # Create an overlay window for each screen
+    # Create system tray icon
+    tray_icon = QSystemTrayIcon()
+    tray_icon.setToolTip('Desktop Overlay (Ctrl+Shift+O to toggle)')
+    
+    # Create tray menu
+    tray_menu = QMenu()
+    
+    # Create toggle action
+    toggle_action = QAction('Toggle Overlay (Ctrl+Shift+O)', tray_menu)
+    tray_menu.addAction(toggle_action)
+    
+    # Create exit action
+    exit_action = QAction('Exit', tray_menu)
+    tray_menu.addAction(exit_action)
+    
+    # Set the tray menu
+    tray_icon.setContextMenu(tray_menu)
+    tray_icon.show()
+    
+    # Create overlay manager for hotkey
+    overlay_manager = OverlayManager()
+    
+    # Create overlay windows for each screen
     windows = []
     for screen in app.screens():
         window = OverlayWindow(screen.geometry())
         window.show()
         windows.append(window)
+    
+    # Connect signals
+    def toggle_overlays():
+        for window in windows:
+            window.setVisible(not window.isVisible())
+    
+    toggle_action.triggered.connect(toggle_overlays)
+    overlay_manager.toggle_signal.connect(toggle_overlays)
+    exit_action.triggered.connect(app.quit)
     
     sys.exit(app.exec_())
 
