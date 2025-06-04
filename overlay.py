@@ -50,8 +50,8 @@ class OverlayManager(QObject):
 
     def __init__(self):
         super().__init__()
-        # Register the hotkey
-        keyboard.add_hotkey('ctrl+shift+o', self.toggle_overlay)
+        # Register the hotkey - F8 is rarely used by applications
+        keyboard.add_hotkey('F8', self.toggle_overlay)
 
     def toggle_overlay(self):
         self.toggle_signal.emit()
@@ -214,13 +214,13 @@ def main():
     # Create system tray icon with custom icon
     tray_icon = QSystemTrayIcon()
     tray_icon.setIcon(create_tray_icon(current_color))
-    tray_icon.setToolTip('Desktop Overlay (Ctrl+Shift+O to toggle)')
+    tray_icon.setToolTip('Desktop Overlay (F8 to toggle)')
     
     # Create tray menu
     tray_menu = QMenu()
     
     # Create toggle action
-    toggle_action = QAction('Toggle Overlay (Ctrl+Shift+O)', tray_menu)
+    toggle_action = QAction('Toggle Overlay (F8)', tray_menu)
     tray_menu.addAction(toggle_action)
     
     # Create color change action
