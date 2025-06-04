@@ -1,7 +1,7 @@
 import sys
 from PyQt5.QtWidgets import QApplication, QMainWindow, QGraphicsBlurEffect, QSystemTrayIcon, QMenu, QAction
 from PyQt5.QtCore import Qt, QRect, QRectF
-from PyQt5.QtGui import QColor, QPainter, QPainterPath, QIcon
+from PyQt5.QtGui import QColor, QPainter, QPainterPath, QIcon, QPixmap
 from PyQt5.QtCore import QObject, pyqtSignal
 import keyboard
 import win32gui
@@ -82,11 +82,24 @@ class OverlayWindow(QMainWindow):
         painter.setBrush(self.border_color)
         painter.drawPath(path)
 
+def create_tray_icon():
+    # Create a simple blue square icon
+    pixmap = QPixmap(32, 32)
+    pixmap.fill(Qt.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.Antialiasing)
+    painter.setBrush(QColor(0, 120, 255))
+    painter.setPen(Qt.NoPen)
+    painter.drawRoundedRect(4, 4, 24, 24, 4, 4)
+    painter.end()
+    return QIcon(pixmap)
+
 def main():
     app = QApplication(sys.argv)
     
-    # Create system tray icon
+    # Create system tray icon with custom icon
     tray_icon = QSystemTrayIcon()
+    tray_icon.setIcon(create_tray_icon())
     tray_icon.setToolTip('Desktop Overlay (Ctrl+Shift+O to toggle)')
     
     # Create tray menu
@@ -102,6 +115,12 @@ def main():
     
     # Set the tray menu
     tray_icon.setContextMenu(tray_menu)
+    
+    # Show the tray icon
+    if not QSystemTrayIcon.isSystemTrayAvailable():
+        print("System tray is not available")
+        sys.exit(1)
+    
     tray_icon.show()
     
     # Create overlay manager for hotkey
